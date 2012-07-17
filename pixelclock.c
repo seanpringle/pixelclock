@@ -44,6 +44,12 @@
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
 #include <X11/Xatom.h>
+#include <X11/extensions/Xinerama.h>
+
+#define MAX(a, b) ((a) > (b) ? (a) : (b))
+#define MIN(a, b) ((a) < (b) ? (a) : (b))
+#define OVERLAP(a,b,c,d) (((a)==(c) && (b)==(d)) || MIN((a)+(b), (c)+(d)) - MAX((a), (c)) > 0)
+#define INTERSECT(x,y,w,h,x1,y1,w1,h1) (OVERLAP((x),(w),(x1),(w1)) && OVERLAP((y),(h),(y1),(h1)))
 
 /* default clock size */
 #define DEFSIZE 3
@@ -244,6 +250,30 @@ init_x(const char *display)
 
 	x.dpy_width = DisplayWidth(x.dpy, x.screen);
 	x.dpy_height = DisplayHeight(x.dpy, x.screen);
+
+	// locate the relevant monitor
+	if (XineramaIsActive(x.dpy))
+	{
+		int monitors, i, xp = 0, yp = 0;
+		XineramaScreenInfo *info = XineramaQueryScreens(x.dpy, &monitors);
+		if (info)
+		{
+			// try to be flexible about monitor layout
+			if (x.position == 'l') { xp = x.dpy_width/10; yp = x.dpy_height/2; }
+			if (x.position == 'r') { xp = x.dpy_width-x.dpy_width/10; yp = x.dpy_height/2; }
+			if (x.position == 't') { xp = x.dpy_width/2; yp = x.dpy_height/10; }
+			if (x.position == 'b') { xp = x.dpy_width/2; yp = x.dpy_height-x.dpy_height/10; }
+			for (i = 0; i < monitors; i++)
+			{
+				if (INTERSECT(xp, yp, 1, 1, info[i].x_org, info[i].y_org, info[i].width, info[i].height))
+				{
+					x.dpy_width = info[i].width; x.dpy_height = info[i].height;
+					break;
+				}
+			}
+			XFree(info);
+		}
+	}
 
 	x.win_colormap = DefaultColormap(x.dpy, DefaultScreen(x.dpy));
 
