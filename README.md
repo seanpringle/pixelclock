@@ -7,7 +7,9 @@
 		[time time2 ...]
 
 * Colors are X11 named colors.
+* Default size if 3 pixels.
 * Times are of format **hh:mm**.
+* Default times are: 09:00, 12:00, 17:00
 * Long-form command line arguments are required.
 
 ## Original Idea
