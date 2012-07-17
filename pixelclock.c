@@ -1,16 +1,14 @@
-/* vim:ts=8
- * $Id: pixelclock.c,v 1.8 2009/03/09 06:35:26 jcs Exp $
- *
- * pixelclock
+/* pixelclock
  * a different way of looking at time
  *
+ * Copyright (c) 2012 Sean Pringle <sean.pringle@gmail.com>
  * Copyright (c) 2005,2008-2009 joshua stein <jcs@jcs.org>
  * Copyright (c) 2005 Federico G. Schwindt
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
  * are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright
  *    notice, this list of conditions and the following disclaimer.
  * 2. Redistributions in binary form must reproduce the above copyright
@@ -18,7 +16,7 @@
  *    documentation and/or other materials provided with the distribution.
  * 3. The name of the author may not be used to endorse or promote products
  *    derived from this software without specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR
  * IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
  * OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
@@ -38,11 +36,13 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <sys/time.h>
 #include <unistd.h>
 #include <sys/types.h>
 
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
+#include <X11/Xatom.h>
 
 /* default clock size */
 #define DEFSIZE 3
@@ -102,7 +102,7 @@ main(int argc, char* argv[])
 
 	bzero(&x, sizeof(struct xinfo));
 	x.size = DEFSIZE;
-	x.position = NULL;
+	x.position = '\0';
 
 	while ((c = getopt_long_only(argc, argv, "", longopts, NULL)) != -1) {
 		switch (c) {
@@ -251,7 +251,6 @@ init_x(const char *display)
 	int rc;
 	int left = 0, top = 0, width = 0, height = 0;
 	XGCValues values;
-	XSetWindowAttributes attributes;
 	XTextProperty win_name_prop;
 
 	if (!(x.dpy = XOpenDisplay(display)))
@@ -304,10 +303,22 @@ init_x(const char *display)
 
 	XSetWMName(x.dpy, x.win, &win_name_prop);
 
-	/* remove all window manager decorations and force our position/size */
-	/* XXX: apparently this is not very nice */
-	attributes.override_redirect = True;
-	XChangeWindowAttributes(x.dpy, x.win, CWOverrideRedirect, &attributes);
+	// EWMH support
+	Atom dock  = XInternAtom(x.dpy, "_NET_WM_WINDOW_TYPE_DOCK", False);
+	Atom type  = XInternAtom(x.dpy, "_NET_WM_WINDOW_TYPE", False);
+	Atom strut = XInternAtom(x.dpy, "_NET_WM_STRUT", False);
+
+	// become a dock
+	XChangeProperty(x.dpy, x.win, type, XA_WINDOW, 32, PropModeReplace, (unsigned char*)&dock, 1);
+
+	unsigned long struts[4] = { 0, 0, 0, 0 };
+	if (x.position == 'b') struts[3] = x.size;
+	if (x.position == 't') struts[2] = x.size;
+	if (x.position == 'r') struts[1] = x.size;
+	if (x.position == 'l') struts[0] = x.size;
+
+	// reserve screen space
+	XChangeProperty(x.dpy, x.win, strut, XA_CARDINAL, 32, PropModeReplace, (unsigned char*)&struts, 4);
 
 	if (!(x.gc = XCreateGC(x.dpy, x.win, 0, &values)))
 		errx(1, "XCreateGC");
