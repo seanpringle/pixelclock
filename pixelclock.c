@@ -129,7 +129,7 @@ main(int argc, char* argv[])
 	display = arg_str(argc, argv, "-display", NULL);
 	x.size  = arg_int(argc, argv, "-size", DEFSIZE);
 
-	x.position = 0;
+	x.position = DEFPOS;
 	if (arg_pos(argc, argv, "-bottom") >= 0) x.position = 'b';
 	if (arg_pos(argc, argv, "-top"   ) >= 0) x.position = 't';
 	if (arg_pos(argc, argv, "-left"  ) >= 0) x.position = 'l';
