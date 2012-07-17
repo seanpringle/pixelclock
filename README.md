@@ -14,7 +14,7 @@ https://jcs.org/notaweblog/2005/06/28/pixelclock/
 
 * Convert to EWMH panel with struts.
 * Add configurable colors.
+* Require long-form command line arguments.
 * Add Xinerama/Xrandr check to:
 	* Avoid crossing monitor edges.
 	* Support monitors with different sizes (root window dead space problem).
-* Require long-form command line arguments.
