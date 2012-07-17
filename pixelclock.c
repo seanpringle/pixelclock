@@ -118,16 +118,16 @@ main(int argc, char* argv[])
 
 	bzero(&x, sizeof(struct xinfo));
 
-	if (arg_pos(argc, argv, "-h") >= 0 || arg_pos(argc, argv, "-help") >= 0) usage();
+	if (arg_pos(argc, argv, "-help") >= 0) usage();
 
-	display = arg_str(argc, argv, "-d", arg_str(argc, argv, "-display", NULL));
-	x.size  = arg_int(argc, argv, "-s", arg_int(argc, argv, "-size", DEFSIZE));
+	display = arg_str(argc, argv, "-display", NULL);
+	x.size  = arg_int(argc, argv, "-size", DEFSIZE);
 
 	x.position = 0;
-	if (arg_pos(argc, argv, "-b") >= 0 || arg_pos(argc, argv, "-bottom") >= 0) x.position = 'b';
-	if (arg_pos(argc, argv, "-t") >= 0 || arg_pos(argc, argv, "-top"   ) >= 0) x.position = 't';
-	if (arg_pos(argc, argv, "-l") >= 0 || arg_pos(argc, argv, "-left"  ) >= 0) x.position = 'l';
-	if (arg_pos(argc, argv, "-r") >= 0 || arg_pos(argc, argv, "-right" ) >= 0) x.position = 'r';
+	if (arg_pos(argc, argv, "-bottom") >= 0) x.position = 'b';
+	if (arg_pos(argc, argv, "-top"   ) >= 0) x.position = 't';
+	if (arg_pos(argc, argv, "-left"  ) >= 0) x.position = 'l';
+	if (arg_pos(argc, argv, "-right" ) >= 0) x.position = 'r';
 
 	x.background = arg_str(argc, argv, "-background", "black");
 	x.tickcolor  = arg_str(argc, argv, "-tickcolor",  "royal blue");
