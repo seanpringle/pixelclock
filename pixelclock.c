@@ -39,6 +39,7 @@
 #include <sys/time.h>
 #include <unistd.h>
 #include <sys/types.h>
+#include <regex.h>
 
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
@@ -65,111 +66,93 @@ struct xinfo {
 	char position;
 	GC gc;
 	Colormap win_colormap;
+	char *tickcolor, *timecolor, *highcolor, *background;
 } x;
 
-const struct option longopts[] = {
-	{ "display",	required_argument,	NULL,	'd' },
-	{ "size",	required_argument,	NULL,	's' },
-	{ "left",	no_argument,		NULL,	'l' },
-	{ "right",	no_argument,		NULL,	'r' },
-	{ "top",	no_argument,		NULL,	't' },
-	{ "bottom",	no_argument,		NULL,	'b' },
+// cli arg handling
+int arg_pos(int argc, char *argv[], char *key)
+{
+	int i; for (i = 0; i < argc && strcasecmp(argv[i], key); i++);
+	return i < argc ? i: -1;
+}
 
-	{ NULL,		0,			NULL,	0 }
-};
+char* arg_str(int argc, char *argv[], char *key, char* def)
+{
+	int i = arg_pos(argc, argv, key);
+	return (i > 0 && i < argc-1) ? argv[i+1]: def;
+}
+
+int arg_int(int argc, char *argv[], char *key, int def)
+{
+	int i = arg_pos(argc, argv, key);
+	return (i > 0 && i < argc-1) ? strtol(argv[i+1], NULL, 10): def;
+}
+
+// once-off regex match. don't use for repeat matching; compile instead
+int regquick(char *pat, char *str)
+{
+	regex_t re; regcomp(&re, pat, REG_EXTENDED|REG_ICASE|REG_NOSUB);
+	int r = regexec(&re, str, 0, NULL, 0) == 0 ?1:0;
+	regfree(&re); return r;
+}
 
 extern char *__progname;
 
-long	getcolor(const char *);
-void	handler(int sig);
-void	init_x(const char *);
-void	usage(void);
+long getcolor(const char *);
+void handler(int sig);
+void init_x(const char *);
+void usage(void);
 
 int
 main(int argc, char* argv[])
 {
-	char *display = NULL, *p;
-	int c, i, y;
+	char *display = NULL;
+	int i, y;
 	int hourtick, lastpos = -1, newpos = 0;
 	struct timeval tv[2];
 	time_t now;
 	struct tm *t;
-
-	float *hihours;
-	int nhihours;
-
 	XEvent event;
+	int nhihours = 0;
+	float *hihours = NULL;
 
 	bzero(&x, sizeof(struct xinfo));
-	x.size = DEFSIZE;
-	x.position = '\0';
 
-	while ((c = getopt_long_only(argc, argv, "", longopts, NULL)) != -1) {
-		switch (c) {
-		case 'd':
-			display = optarg;
-			break;
+	if (arg_pos(argc, argv, "-h") >= 0 || arg_pos(argc, argv, "-help") >= 0) usage();
 
-		case 'b':
-		case 't':
-		case 'l':
-		case 'r':
-			if (x.position)
-				errx(1, "only one of -top, -bottom, -left, "
-				    "-right allowed");
-				/* NOTREACHED */
+	display = arg_str(argc, argv, "-d", arg_str(argc, argv, "-display", NULL));
+	x.size  = arg_int(argc, argv, "-s", arg_int(argc, argv, "-size", DEFSIZE));
 
-			x.position = c;
-			break;
+	x.position = 0;
+	if (arg_pos(argc, argv, "-b") >= 0 || arg_pos(argc, argv, "-bottom")) x.position = 'b';
+	if (arg_pos(argc, argv, "-t") >= 0 || arg_pos(argc, argv, "-top"   )) x.position = 't';
+	if (arg_pos(argc, argv, "-l") >= 0 || arg_pos(argc, argv, "-left"  )) x.position = 'l';
+	if (arg_pos(argc, argv, "-r") >= 0 || arg_pos(argc, argv, "-right" )) x.position = 'r';
 
-		case 's':
-			x.size = strtol(optarg, &p, 10);
-			if (*p || x.size < 1)
-				errx(1, "illegal value -- %s", optarg);
-				/* NOTREACHED */
-			break;
+	x.background = arg_str(argc, argv, "-background", "black");
+	x.tickcolor  = arg_str(argc, argv, "-tickcolor",  "royal blue");
+	x.timecolor  = arg_str(argc, argv, "-timecolor",  "yellow");
+	x.highcolor  = arg_str(argc, argv, "-highcolor",  "green");
 
-		default:
-			usage();
-			/* NOTREACHED */
-		}
+	/* get times from args */
+	for (i = 0; i < argc; i++)
+	{
+		if (!regquick("^[0-9]+:[0-9]+$", argv[i])) continue;
+
+		nhihours++;
+		hihours = realloc(hihours, nhihours * sizeof(float));
+
+		char *p = argv[i];
+		int h = strtol(p, &p, 10);
+		int m = strtol(p+1, NULL, 10);
+
+		hihours[nhihours-1] = h + (m / 60.0);
 	}
-
-	if (!x.position)
-		x.position = DEFPOS;
-
-	argc -= optind;
-	argv += optind;
-
-	if (argc == 0) {
-		/* use default times */
-		nhihours = sizeof(defhours) / sizeof(defhours[0]);
-		if ((hihours = alloca(sizeof(defhours))) == NULL)
-			err(1, NULL);
-
-		for (i = 0; i < nhihours; i++)
-			hihours[i] = defhours[i];
-	} else {
-		/* get times from args */
-		nhihours = argc;
-		if ((hihours = alloca(nhihours * sizeof(float))) == NULL)
-			err(1, NULL);
-
-		for (i = 0; i < argc; ++i) {
-			int h, m;
-			char *p = argv[i];
-
-			/* parse times like 14:12 */
-			h = atoi(p);
-			if ((p = strchr(p, ':')) == NULL)
-				errx(1, "invalid time %s", argv[i]);
-			m = atoi(p + 1);
-
-			if (h > 23 || h < 0 || m > 59 || m < 0)
-				errx(1, "Invalid time %s", argv[i]);
-
-			hihours[i] = h + (m / 60.0);
-		}
+	/* use default times */
+	if (!nhihours)
+	{
+		hihours = (float*)defhours;
+		nhihours = sizeof(defhours) / sizeof(float);
 	}
 
 	init_x(display);
@@ -204,7 +187,7 @@ main(int argc, char* argv[])
 			XClearWindow(x.dpy, x.win);
 
 			/* draw the current time */
-			XSetForeground(x.dpy, x.gc, getcolor("yellow"));
+			XSetForeground(x.dpy, x.gc, getcolor(x.timecolor));
 			if (x.position == 'b' || x.position == 't')
 				XFillRectangle(x.dpy, x.win, x.gc,
 					newpos, 0, 6, x.size);
@@ -213,7 +196,7 @@ main(int argc, char* argv[])
 					0, newpos, x.size, 6);
 
 			/* draw the hour ticks */
-			XSetForeground(x.dpy, x.gc, getcolor("blue"));
+			XSetForeground(x.dpy, x.gc, getcolor(x.tickcolor));
 			for (y = 1; y <= 23; y++)
 				if (x.position == 'b' || x.position == 't')
 					XFillRectangle(x.dpy, x.win, x.gc,
@@ -223,7 +206,7 @@ main(int argc, char* argv[])
 						0, (y * hourtick), x.size, 2);
 
 			/* highlight requested times */
-			XSetForeground(x.dpy, x.gc, getcolor("green"));
+			XSetForeground(x.dpy, x.gc, getcolor(x.highcolor));
 			for (i = 0; i < nhihours; i++)
 				if (x.position == 'b' || x.position == 't')
 					XFillRectangle(x.dpy, x.win, x.gc,
@@ -294,8 +277,8 @@ init_x(const char *display)
 	x.win = XCreateSimpleWindow(x.dpy, RootWindow(x.dpy, x.screen),
 			left, top, width, height,
 			0,
-			BlackPixel(x.dpy, x.screen),
-			BlackPixel(x.dpy, x.screen));
+			getcolor(x.background),
+			getcolor(x.background));
 
 	if (!(rc = XStringListToTextProperty(&win_name, 1, &win_name_prop)))
 		errx(1, "XStringListToTextProperty");
@@ -340,8 +323,7 @@ getcolor(const char *color)
 
 	XColor tcolor;
 
-	if (!(rc = XAllocNamedColor(x.dpy, x.win_colormap, color, &tcolor,
-	&tcolor)))
+	if (!(rc = XAllocNamedColor(x.dpy, x.win_colormap, color, &tcolor, &tcolor)))
 		errx(1, "can't allocate %s", color);
 
 	return tcolor.pixel;
@@ -359,8 +341,9 @@ handler(int sig)
 void
 usage(void)
 {
-	fprintf(stderr, "usage: %s %s\n", __progname,
-		"[-display host:dpy] [-left|-right|-top|-bottom] [-size <pixels>] "
+	fprintf(stderr, "usage: %s %s %s %s\n", __progname,
+		"[-display host:dpy] [-left|-right|-top|-bottom] [-size <pixels>]",
+		"[-background <color>] [-tickcolor <color>] [-timecolor <color>] [-highcolor <color>]",
 		"[time time2 ...]");
 	exit(1);
 }
