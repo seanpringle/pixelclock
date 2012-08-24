@@ -317,21 +317,36 @@ init_x(const char *display)
 	XSetWMName(x.dpy, x.win, &win_name_prop);
 
 	// EWMH support
-	Atom dock  = XInternAtom(x.dpy, "_NET_WM_WINDOW_TYPE_DOCK", False);
-	Atom type  = XInternAtom(x.dpy, "_NET_WM_WINDOW_TYPE", False);
-	Atom strut = XInternAtom(x.dpy, "_NET_WM_STRUT", False);
+	Atom dock    = XInternAtom(x.dpy, "_NET_WM_WINDOW_TYPE_DOCK", False);
+	Atom state   = XInternAtom(x.dpy, "_NET_WM_STATE", False);
+	Atom taskbar = XInternAtom(x.dpy, "_NET_WM_STATE_SKIP_TASKBAR", False);
+	Atom pager   = XInternAtom(x.dpy, "_NET_WM_STATE_SKIP_PAGER", False);
+	Atom type    = XInternAtom(x.dpy, "_NET_WM_WINDOW_TYPE", False);
+	Atom strut   = XInternAtom(x.dpy, "_NET_WM_STRUT", False);
 
 	// become a dock
 	XChangeProperty(x.dpy, x.win, type, XA_ATOM, 32, PropModeReplace, (unsigned char*)&dock, 1);
 
+	// reserve screen space
 	unsigned long struts[4] = { 0, 0, 0, 0 };
 	if (x.position == 'b') struts[3] = x.size;
 	if (x.position == 't') struts[2] = x.size;
 	if (x.position == 'r') struts[1] = x.size;
 	if (x.position == 'l') struts[0] = x.size;
-
-	// reserve screen space
 	XChangeProperty(x.dpy, x.win, strut, XA_CARDINAL, 32, PropModeReplace, (unsigned char*)&struts, 4);
+
+	// get ignored
+	XEvent e;
+	memset(&e, 0, sizeof(XEvent));
+	e.xclient.type         = ClientMessage;
+	e.xclient.message_type = state;
+	e.xclient.window       = x.win;
+	e.xclient.format       = 32;
+	e.xclient.data.l[0]    = 1; // action: 0 = remove, 1 = add, 2 = toggle
+	e.xclient.data.l[1]    = taskbar;
+	e.xclient.data.l[2]    = pager;
+	e.xclient.data.l[3]    = 1; // event source indicator: app = 1, pager = 2
+	XSendEvent(x.dpy, RootWindow(x.dpy, x.screen), False, SubstructureNotifyMask|SubstructureRedirectMask, &e);
 
 	if (!(x.gc = XCreateGC(x.dpy, x.win, 0, &values)))
 		errx(1, "XCreateGC");
