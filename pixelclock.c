@@ -322,7 +322,7 @@ init_x(const char *display)
 	Atom strut = XInternAtom(x.dpy, "_NET_WM_STRUT", False);
 
 	// become a dock
-	XChangeProperty(x.dpy, x.win, type, XA_WINDOW, 32, PropModeReplace, (unsigned char*)&dock, 1);
+	XChangeProperty(x.dpy, x.win, type, XA_ATOM, 32, PropModeReplace, (unsigned char*)&dock, 1);
 
 	unsigned long struts[4] = { 0, 0, 0, 0 };
 	if (x.position == 'b') struts[3] = x.size;
