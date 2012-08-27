@@ -313,6 +313,11 @@ init_x(const char *display)
 
 	XSetWMName(x.dpy, x.win, &win_name_prop);
 
+	XClassHint *win_class_hint = XAllocClassHint();
+	win_class_hint->res_name = win_name;
+	win_class_hint->res_class = win_name;
+	XSetClassHint(x.dpy, x.win, win_class_hint);
+
 	// EWMH support
 	Atom dock    = XInternAtom(x.dpy, "_NET_WM_WINDOW_TYPE_DOCK", False);
 	Atom state   = XInternAtom(x.dpy, "_NET_WM_STATE", False);
