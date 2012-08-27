@@ -57,6 +57,9 @@
 /* default position is along the right side */
 #define DEFPOS 'r'
 
+/* default monitor */
+#define DEFMON 0
+
 /* so our window manager knows us */
 char* win_name = "pixelclock";
 
@@ -65,8 +68,8 @@ const float defhours[3] = { 9.0, 12.0, 17.0 };
 
 struct xinfo {
 	Display* dpy;
-	int dpy_width, dpy_height;
-	int screen;
+	int dpy_x, dpy_y, dpy_width, dpy_height;
+	int screen, monitor;
 	Window win;
 	int size;
 	char position;
@@ -126,8 +129,9 @@ main(int argc, char* argv[])
 
 	if (arg_pos(argc, argv, "-help") >= 0) usage();
 
-	display = arg_str(argc, argv, "-display", NULL);
-	x.size  = arg_int(argc, argv, "-size", DEFSIZE);
+	display   = arg_str(argc, argv, "-display", NULL);
+	x.size    = arg_int(argc, argv, "-size",    DEFSIZE);
+	x.monitor = arg_int(argc, argv, "-monitor", DEFMON);
 
 	x.position = DEFPOS;
 	if (arg_pos(argc, argv, "-bottom") >= 0) x.position = 'b';
@@ -248,29 +252,22 @@ init_x(const char *display)
 
 	x.screen = DefaultScreen(x.dpy);
 
+	x.dpy_x = 0;
+	x.dpy_y = 0;
 	x.dpy_width = DisplayWidth(x.dpy, x.screen);
 	x.dpy_height = DisplayHeight(x.dpy, x.screen);
 
 	// locate the relevant monitor
 	if (XineramaIsActive(x.dpy))
 	{
-		int monitors, i, xp = 0, yp = 0;
+		int monitors;
 		XineramaScreenInfo *info = XineramaQueryScreens(x.dpy, &monitors);
-		if (info)
+		if (info && monitors > x.monitor)
 		{
-			// try to be flexible about monitor layout
-			if (x.position == 'l') { xp = x.dpy_width/10; yp = x.dpy_height/2; }
-			if (x.position == 'r') { xp = x.dpy_width-x.dpy_width/10; yp = x.dpy_height/2; }
-			if (x.position == 't') { xp = x.dpy_width/2; yp = x.dpy_height/10; }
-			if (x.position == 'b') { xp = x.dpy_width/2; yp = x.dpy_height-x.dpy_height/10; }
-			for (i = 0; i < monitors; i++)
-			{
-				if (INTERSECT(xp, yp, 1, 1, info[i].x_org, info[i].y_org, info[i].width, info[i].height))
-				{
-					x.dpy_width = info[i].width; x.dpy_height = info[i].height;
-					break;
-				}
-			}
+			x.dpy_x = info[x.monitor].x_org;
+			x.dpy_y = info[x.monitor].y_org;
+			x.dpy_width = info[x.monitor].width;
+			x.dpy_height = info[x.monitor].height;
 			XFree(info);
 		}
 	}
@@ -279,27 +276,27 @@ init_x(const char *display)
 
 	switch (x.position) {
 	case 'b':
-		left = 0;
+		left = x.dpy_x;
 		height = x.size;
-		top = x.dpy_height - height;
+		top = x.dpy_y + x.dpy_height - height;
 		width = x.dpy_width;
 		break;
 	case 't':
-		left = 0;
-		top = 0;
+		left = x.dpy_x;
+		top = x.dpy_y;
 		height = x.size;
 		width = x.dpy_width;
 		break;
 	case 'l':
-		left = 0;
-		top = 0;
+		left = x.dpy_x;
+		top = x.dpy_y;
 		height = x.dpy_height;
 		width = x.size;
 		break;
 	case 'r':
 		width = x.size;
-		left = x.dpy_width - width;
-		top = 0;
+		left = x.dpy_x + x.dpy_width - width;
+		top = x.dpy_y;
 		height = x.dpy_height;
 		break;
 	}
@@ -387,7 +384,7 @@ void
 usage(void)
 {
 	fprintf(stderr, "usage: %s %s %s %s\n", __progname,
-		"[-display host:dpy] [-left|-right|-top|-bottom] [-size <pixels>]",
+		"[-display host:dpy] [-left|-right|-top|-bottom] [-monitor N] [-size <pixels>]",
 		"[-background <color>] [-tickcolor <color>] [-timecolor <color>] [-highcolor <color>]",
 		"[time time2 ...]");
 	exit(1);
